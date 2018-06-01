@@ -11,16 +11,27 @@ import android.app.NotificationChannel
 import android.os.Build
 import android.support.v4.app.NotificationCompat
 import android.app.PendingIntent
+import android.app.Service
+import android.content.Context
+import android.hardware.Sensor
+import android.hardware.SensorEvent
+import android.hardware.SensorEventListener
 import android.media.AudioDeviceInfo
 import android.support.v4.app.NotificationManagerCompat
 import ms.jada.canyouhearthemusic.canyouhearthemusic.AudioOutputReceiver.Companion.INTERNAL_OUTPUT
+import java.util.*
+import android.hardware.SensorManager
 
-class BackgroundService : NotificationListenerService() {
+
+
+class BackgroundService : NotificationListenerService(), SensorEventListener {
+
 
     companion object {
         val STATE_CHANGE_EXTRA = "SCE"
 
         val OUTPUT_CHANGED = 4
+        val SCREEN_CHANGED = 5
 
         val OUTPUT_NOTIFICATION_ID = 921
 
@@ -32,6 +43,8 @@ class BackgroundService : NotificationListenerService() {
     }
 
     val aor = AudioOutputReceiver()
+    private var mSensorManager: SensorManager? = null
+    private var mProximity: Sensor? = null
 
     override fun onCreate() {
         super.onCreate()
@@ -47,8 +60,14 @@ class BackgroundService : NotificationListenerService() {
 
         registerReceiver(aor, audioIntentFilter)
 
+        mSensorManager = getSystemService(Context.SENSOR_SERVICE) as SensorManager?;
+        mProximity = mSensorManager?.getDefaultSensor(Sensor.TYPE_PROXIMITY);
+
+        mSensorManager!!.registerListener(this, mProximity, SensorManager.SENSOR_DELAY_NORMAL)
 
     }
+
+    var screenState = 0
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (intent == null) return super.onStartCommand(intent, flags, startId)
@@ -69,7 +88,7 @@ class BackgroundService : NotificationListenerService() {
                     INTERNAL_OUTPUT, AudioDeviceInfo.TYPE_BUILTIN_SPEAKER,
                     AudioDeviceInfo.TYPE_BUILTIN_EARPIECE,
                     AudioDeviceInfo.TYPE_HDMI,
-                    AudioDeviceInfo.TYPE_TELEPHONY -> {
+                    AudioDeviceInfo.TYPE_TELEPHONY, AudioDeviceInfo.TYPE_UNKNOWN -> {
 
                     }
                     else -> {
@@ -81,9 +100,13 @@ class BackgroundService : NotificationListenerService() {
             OUTPUT_SELECTED -> {
                 Log.d("BS", "OMGOMGOMGOMGOMG")
             }
+            SCREEN_CHANGED -> {
+                Log.i("BS", "SCREEN_CHANGED")
+                screenState = intent.getIntExtra(ScreenStateReceiver.SCREEN_CHANGE, -1)
+            }
         }
 
-        return super.onStartCommand(intent, flags, startId)
+        return Service.START_STICKY
     }
 
     private fun askOutput() {
@@ -140,5 +163,14 @@ class BackgroundService : NotificationListenerService() {
     override fun onDestroy() {
         unregisterReceiver(aor)
         super.onDestroy()
+    }
+
+    override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {
+    }
+
+    override fun onSensorChanged(event: SensorEvent?) {
+
+        val proximity = event!!.values[0]
+        Log.d("BG","Sensor Changed $proximity");
     }
 }
